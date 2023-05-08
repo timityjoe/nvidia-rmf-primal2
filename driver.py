@@ -1,8 +1,8 @@
 import numpy as np
 
 # Mod by Tim:
-import tensorflow as tf
-# import tensorflow.compat.v1 as tf
+# import tensorflow as tf
+import tensorflow.compat.v1 as tf
 
 import os
 import ray
@@ -142,6 +142,10 @@ def main():
         global_network = ACNet(GLOBAL_NET_SCOPE,a_size,trainer,False,NUM_CHANNEL, OBS_SIZE,GLOBAL_NET_SCOPE, GLOBAL_NETWORK=True)
 
         global_summary = tf.summary.FileWriter(train_path)
+        # global_summary = tf.summary.create_file_writer(train_path)
+
+        # Mod by Tim:
+        # saver = tf.train.Saver(max_to_keep=1)
         saver = tf.train.Saver(max_to_keep=1)
 
     with tf.Session(config=config) as sess:

@@ -3,7 +3,7 @@
 # import tensorflow as tf
 # import tensorflow.contrib.layers as layers
 import tensorflow.compat.v1  as tf
-import tensorflow_addons as tfa
+import tensorflow.keras.layers as layers
 
 import numpy as np
 
@@ -124,9 +124,13 @@ class ACNet:
             # conv = layers.conv2d(inputs=inputs, padding="VALID", num_outputs=output_size,
             #                      kernel_size=[1, kernal_size], stride=1,
             #                      data_format="NHWC", weights_initializer=w_init, activation_fn=tf.nn.relu)
-            conv = tfa.layers.conv2d(inputs=inputs, padding="VALID", num_outputs=output_size,
-                                 kernel_size=[1, kernal_size], stride=1,
-                                 data_format="NHWC", weights_initializer=w_init, activation_fn=tf.nn.relu)
+            conv = layers.Conv2D(filters=output_size,
+                           kernel_size=(1, kernal_size),
+                           strides=1,
+                           padding="valid",
+                           data_format="channels_last",
+                           kernel_initializer=w_init,
+                           activation="relu")(inputs)
 
             return conv
 
@@ -135,16 +139,21 @@ class ACNet:
                 # conv = layers.conv2d(inputs=inputs, padding="SAME", num_outputs=output_size,
                 #                      kernel_size=[kernal_size[0], kernal_size[1]], stride=1,
                 #                      data_format="NHWC", weights_initializer=w_init, activation_fn=tf.nn.relu)
-                conv = tfa.layers.conv2d(inputs=inputs, padding="SAME", num_outputs=output_size,
-                                     kernel_size=[kernal_size[0], kernal_size[1]], stride=1,
-                                     data_format="NHWC", weights_initializer=w_init, activation_fn=tf.nn.relu)
-
+                conv = layers.Conv2D(filters=output_size,
+                           kernel_size=(kernal_size[0], kernal_size[1]),
+                           strides=1,
+                           padding="same",
+                           data_format="channels_last",
+                           kernel_initializer=w_init,
+                           activation="relu")(inputs)
+                
                 return conv
 
             conv1 = conv_2d(inputs, [3, 3], RNN_SIZE // 4)
             conv1a = conv_2d(conv1, [3, 3], RNN_SIZE // 4)
             conv1b = conv_2d(conv1a, [3, 3], RNN_SIZE // 4)
-            pool1 = layers.max_pool2d(inputs=conv1b, kernel_size=[2, 2])
+            # pool1 = layers.max_pool2d(inputs=conv1b, kernel_size=[2, 2])
+            pool1 = layers.MaxPool2D(pool_size=(2, 2))(conv1b)
             return pool1
 
         # Mod by Tim:
@@ -155,16 +164,34 @@ class ACNet:
 
         # conv3 = layers.conv2d(inputs=vgg2, padding="VALID", num_outputs=RNN_SIZE - GOAL_REPR_SIZE, kernel_size=[2, 2],
         #                       stride=1, data_format="NHWC", weights_initializer=w_init, activation_fn=None)
-        conv3 = tfa.layers.conv2D(inputs=vgg2, padding="VALID", num_outputs=RNN_SIZE - GOAL_REPR_SIZE, kernel_size=[2, 2],
-                              stride=1, data_format="NHWC", weights_initializer=w_init, activation_fn=None)
+        conv3 = layers.Conv2D(filters=RNN_SIZE - GOAL_REPR_SIZE,
+                           kernel_size=(2, 2),
+                           strides=1,
+                           padding='valid',
+                           data_format='channels_last',
+                           activation=None,
+                           kernel_initializer=w_init)(vgg2)
 
-        flat = tf.nn.relu(layers.flatten(conv3))
-        goal_layer = layers.fully_connected(inputs=goal_pos, num_outputs=GOAL_REPR_SIZE)
+        # flat = tf.nn.relu(layers.flatten(conv3))
+        flat = tf.nn.relu(layers.Flatten()(conv3))
+
+        #goal_layer = layers.fully_connected(inputs=goal_pos, num_outputs=GOAL_REPR_SIZE)
+        goal_layer = layers.Dense(units=GOAL_REPR_SIZE, activation=None)(goal_pos)
+
         hidden_input = tf.concat([flat, goal_layer], 1)
-        h1 = layers.fully_connected(inputs=hidden_input, num_outputs=RNN_SIZE)
-        d1 = layers.dropout(h1, keep_prob=KEEP_PROB1, is_training=TRAINING)
-        h2 = layers.fully_connected(inputs=d1, num_outputs=RNN_SIZE, activation_fn=None)
-        d2 = layers.dropout(h2, keep_prob=KEEP_PROB2, is_training=TRAINING)
+
+        # h1 = layers.fully_connected(inputs=hidden_input, num_outputs=RNN_SIZE)
+        h1 = layers.Dense(units=RNN_SIZE, activation=None)(hidden_input)
+
+        # d1 = layers.dropout(h1, keep_prob=KEEP_PROB1, is_training=TRAINING)
+        d1 = layers.Dropout(rate=1-KEEP_PROB1)(h1, training=TRAINING)
+
+        # h2 = layers.fully_connected(inputs=d1, num_outputs=RNN_SIZE, activation_fn=None)
+        h2 = layers.Dense(units=RNN_SIZE, activation=None)(d1)
+
+        # d2 = layers.dropout(h2, keep_prob=KEEP_PROB2, is_training=TRAINING)
+        d2 = layers.Dropout(rate=1-KEEP_PROB2)(h2, training=TRAINING)
+
         self.h3 = tf.nn.relu(d2 + hidden_input)
         # Recurrent network for temporal dependencies
         lstm_cell = tf.compat.v1.nn.rnn_cell.BasicLSTMCell(RNN_SIZE, state_is_tuple=True)
@@ -184,13 +211,23 @@ class ACNet:
         state_out = (lstm_c[:1, :], lstm_h[:1, :])
         self.rnn_out = tf.reshape(lstm_outputs, [-1, RNN_SIZE])
 
-        policy_layer = layers.fully_connected(inputs=self.rnn_out, num_outputs=a_size,
-                                              weights_initializer=normalized_columns_initializer(1. / float(a_size)),
-                                              biases_initializer=None, activation_fn=None)
+        # policy_layer = layers.fully_connected(inputs=self.rnn_out, num_outputs=a_size,
+        #                                       weights_initializer=normalized_columns_initializer(1. / float(a_size)),
+        #                                       biases_initializer=None, activation_fn=None)
+        policy_layer = layers.Dense(units=a_size, activation=None,
+                          kernel_initializer=tf.keras.initializers.RandomNormal(mean=0.0, stddev=1.0/float(a_size)),
+                          bias_initializer=None)(self.rnn_out)   
+
+
         policy = tf.nn.softmax(policy_layer)
         policy_sig = tf.sigmoid(policy_layer)
-        value = layers.fully_connected(inputs=self.rnn_out, num_outputs=1,
-                                       weights_initializer=normalized_columns_initializer(1.0), biases_initializer=None,
-                                       activation_fn=None)
+
+        # value = layers.fully_connected(inputs=self.rnn_out, num_outputs=1,
+        #                                weights_initializer=normalized_columns_initializer(1.0), biases_initializer=None,
+        #                                activation_fn=None)
+        value = layers.Dense(units=1, activation=None,
+                          kernel_initializer=tf.keras.initializers.RandomNormal(mean=0.0, stddev=1.0),
+                          bias_initializer=None)(self.rnn_out)       
+
 
         return policy, value, state_out, state_in, state_init, policy_sig
