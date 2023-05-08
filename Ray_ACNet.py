@@ -29,6 +29,10 @@ class ACNet:
     def __init__(self, scope, a_size, trainer, TRAINING, NUM_CHANNEL, OBS_SIZE, GLOBAL_NET_SCOPE, GLOBAL_NETWORK=False):
         with tf.compat.v1.variable_scope(str(scope) + '/qvalues'):
             self.trainer = trainer
+
+            # Mod by Tim:
+            tf.compat.v1.disable_eager_execution()
+
             # The input size may require more work to fit the interface.
             self.inputs = tf.compat.v1.placeholder(shape=[None, NUM_CHANNEL, OBS_SIZE, OBS_SIZE], dtype=tf.float32)
             self.goal_pos = tf.compat.v1.placeholder(shape=[None, 3], dtype=tf.float32)
