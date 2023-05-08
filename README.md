@@ -1,9 +1,12 @@
 # PRIMAL_2: Pathfinding via Reinforcement and Imitation Multi_agent Learning - Lifelong
 
-## Setting up Code
+## Setting up Code - References:
+See https://github.com/gsartoretti/PRIMAL/blob/master/README.md
+Before compilation: compile cpp_mstar code
 - cd into the od_mstar3 folder.
 - python3 setup.py build_ext --inplace
-- Check by going back to the root of the git folder, running python3 and "import cpp_mstar"
+- copy so object from build/lib.*/ at the root of the od_mstar3 folder.
+- Check by going back to the root of the git folder, running python3 and "import cpp_mstar" (ie: See Env_Builder.py, "from od_mstar3 import cpp_mstar")
 
 
 ## Running Code

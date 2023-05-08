@@ -1,5 +1,9 @@
 import numpy as np
+
+# Mod by Tim:
 import tensorflow as tf
+# import tensorflow.compat.v1 as tf
+
 import os
 import ray
 
@@ -9,14 +13,32 @@ from Runner import imitationRunner, RLRunner
 from parameters import *
 import random
 
+# Mod by Tim: Check Tensorflow; See 
+# https://www.tensorflow.org/guide/migrate
+# https://stackoverflow.com/questions/75614728/cuda-12-tf-nightly-2-12-could-not-find-cuda-drivers-on-your-machine-gpu-will
+# import torch
+print(f'\nTensorflow version = {tf.__version__}\n')
+print(f'\n{tf.config.list_physical_devices("GPU")}\n')
+# ######
+# print(f'\nAvailable cuda = {torch.cuda.is_available()}')
+# print(f'\nGPUs availables = {torch.cuda.device_count()}')
+# print(f'\nCurrent device = {torch.cuda.current_device()}')
+# print(f'\nCurrent Device location = {torch.cuda.device(0)}')
+# print(f'\nName of the device = {torch.cuda.get_device_name(0)}')
+
 
 ray.init(num_gpus=1)
 
-
-tf.reset_default_graph()
+# Mod by Tim:
+# tf.reset_default_graph()
+tf.compat.v1.reset_default_graph()
 print("Hello World")
 
-config = tf.ConfigProto(allow_soft_placement = True)
+# Mod by Tim:
+# config = tf.ConfigProto(allow_soft_placement = True)
+tf.compat.v1.disable_eager_execution()
+config = tf.compat.v1.ConfigProto(allow_soft_placement = True)
+
 config.gpu_options.per_process_gpu_memory_fraction = 1.0 / (NUM_META_AGENTS - NUM_IL_META_AGENTS + 1)
 config.gpu_options.allow_growth=True
 
@@ -29,8 +51,9 @@ if not os.path.exists(model_path):
 if not os.path.exists(gifs_path):
     os.makedirs(gifs_path)
 
-
-global_step = tf.placeholder(tf.float32)
+# Mod by Tim:
+# global_step = tf.placeholder(tf.float32)
+global_step = tf.compat.v1.placeholder(tf.float32)
         
 if ADAPT_LR:
     # computes LR_Q/sqrt(ADAPT_COEFF*steps+1)
@@ -112,7 +135,10 @@ def writeToTensorBoard(global_summary, tensorboardData, curr_episode, plotMeans=
     
 def main():    
     with tf.device("/gpu:0"):
-        trainer = tf.contrib.opt.NadamOptimizer(learning_rate=lr, use_locking=True)
+        # Mod by Tim:
+        # trainer = tf.contrib.opt.NadamOptimizer(learning_rate=lr, use_locking=True)
+        trainer = tf.keras.optimizers.legacy.Nadam(learning_rate=lr)
+        
         global_network = ACNet(GLOBAL_NET_SCOPE,a_size,trainer,False,NUM_CHANNEL, OBS_SIZE,GLOBAL_NET_SCOPE, GLOBAL_NETWORK=True)
 
         global_summary = tf.summary.FileWriter(train_path)

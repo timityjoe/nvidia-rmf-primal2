@@ -6,10 +6,17 @@ import math, time
 import warnings
 from od_mstar3.col_set_addition import OutOfTimeError, NoSolutionError
 from od_mstar3 import od_mstar
+
+# Mod by Tim:
 from od_mstar3 import cpp_mstar
+
 from GroupLock import Lock
 from matplotlib.colors import *
-from gym.envs.classic_control import rendering
+
+# Mod by Tim:
+# from gym.envs.classic_control import rendering
+import gym.envs.classic_control
+
 import imageio
 from gym import spaces
 

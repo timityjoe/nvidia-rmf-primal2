@@ -1,5 +1,10 @@
-import tensorflow as tf
-import tensorflow.contrib.layers as layers
+
+# Mod by Tim:
+# import tensorflow as tf
+# import tensorflow.contrib.layers as layers
+import tensorflow.compat.v1  as tf
+import tensorflow_addons as tfa
+
 import numpy as np
 
 # parameters for training
@@ -22,46 +27,46 @@ def normalized_columns_initializer(std=1.0):
 
 class ACNet:
     def __init__(self, scope, a_size, trainer, TRAINING, NUM_CHANNEL, OBS_SIZE, GLOBAL_NET_SCOPE, GLOBAL_NETWORK=False):
-        with tf.variable_scope(str(scope) + '/qvalues'):
+        with tf.compat.v1.variable_scope(str(scope) + '/qvalues'):
             self.trainer = trainer
             # The input size may require more work to fit the interface.
-            self.inputs = tf.placeholder(shape=[None, NUM_CHANNEL, OBS_SIZE, OBS_SIZE], dtype=tf.float32)
-            self.goal_pos = tf.placeholder(shape=[None, 3], dtype=tf.float32)
+            self.inputs = tf.compat.v1.placeholder(shape=[None, NUM_CHANNEL, OBS_SIZE, OBS_SIZE], dtype=tf.float32)
+            self.goal_pos = tf.compat.v1.placeholder(shape=[None, 3], dtype=tf.float32)
             self.myinput = tf.transpose(self.inputs, perm=[0, 2, 3, 1])
             self.policy, self.value, self.state_out, self.state_in, self.state_init, self.valids = self._build_net(
                 self.myinput, self.goal_pos, RNN_SIZE, TRAINING, a_size)
         if TRAINING:
-            self.actions = tf.placeholder(shape=[None], dtype=tf.int32)
+            self.actions = tf.compat.v1.placeholder(shape=[None], dtype=tf.int32)
             self.actions_onehot = tf.one_hot(self.actions, a_size, dtype=tf.float32)
-            self.train_valid = tf.placeholder(shape=[None, a_size], dtype=tf.float32)
-            self.target_v = tf.placeholder(tf.float32, [None], 'Vtarget')
-            self.advantages = tf.placeholder(shape=[None], dtype=tf.float32)
+            self.train_valid = tf.compat.v1.placeholder(shape=[None, a_size], dtype=tf.float32)
+            self.target_v = tf.compat.v1.placeholder(tf.float32, [None], 'Vtarget')
+            self.advantages = tf.compat.v1.placeholder(shape=[None], dtype=tf.float32)
 
             self.responsible_outputs = tf.reduce_sum(self.policy * self.actions_onehot, [1])
-            self.train_value = tf.placeholder(tf.float32, [None])
+            self.train_value = tf.compat.v1.placeholder(tf.float32, [None])
             
-            self.train_policy = tf.placeholder(tf.float32, [None])
+            self.train_policy = tf.compat.v1.placeholder(tf.float32, [None])
             
-            self.train_imitation = tf.placeholder(tf.float32, [None]) # NEED THIS
+            self.train_imitation = tf.compat.v1.placeholder(tf.float32, [None]) # NEED THIS
 
-            self.optimal_actions = tf.placeholder(tf.int32, [None]) # NEED THIS
+            self.optimal_actions = tf.compat.v1.placeholder(tf.int32, [None]) # NEED THIS
 
             self.optimal_actions_onehot = tf.one_hot(self.optimal_actions, a_size, dtype=tf.float32) # NEED THIS
             
-            self.train_valids= tf.placeholder(tf.float32, [None,1])
+            self.train_valids= tf.compat.v1.placeholder(tf.float32, [None,1])
 
             # Loss Functions
             self.value_loss  = 0.1 * tf.reduce_mean(
                 self.train_value * tf.square(self.target_v - tf.reshape(self.value, shape=[-1])))
             
-            self.entropy     = - tf.reduce_mean(self.policy * tf.log(tf.clip_by_value(self.policy, 1e-10, 1.0)))
+            self.entropy     = - tf.reduce_mean(self.policy * tf.math.log(tf.clip_by_value(self.policy, 1e-10, 1.0)))
             
             self.policy_loss = - 0.5 * tf.reduce_mean(self.train_policy*
-                tf.log(tf.clip_by_value(self.responsible_outputs, 1e-15, 1.0)) * self.advantages)
+                tf.math.log(tf.clip_by_value(self.responsible_outputs, 1e-15, 1.0)) * self.advantages)
 
             
-            self.valid_loss  = - 16 * tf.reduce_mean(self.train_valids * tf.log(tf.clip_by_value(self.valids, 1e-10, 1.0)) * \
-                                                    self.train_valid + tf.log(
+            self.valid_loss  = - 16 * tf.reduce_mean(self.train_valids * tf.math.log(tf.clip_by_value(self.valids, 1e-10, 1.0)) * \
+                                                    self.train_valid + tf.math.log(
                                  tf.clip_by_value(1 - self.valids, 1e-10, 1.0)) * (1 - self.train_valid))
             
 
@@ -77,13 +82,13 @@ class ACNet:
             # Get gradients from local network using local losses and
             # normalize the gradients using clipping
             
-            local_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope + '/qvalues')
+            local_vars = tf.compat.v1.get_collection(tf.compat.v1.GraphKeys.TRAINABLE_VARIABLES, scope + '/qvalues')
             self.gradients = tf.gradients(self.loss, local_vars)
-            self.var_norms = tf.global_norm(local_vars)
+            self.var_norms = tf.linalg.global_norm(local_vars)
             self.grads, self.grad_norms = tf.clip_by_global_norm(self.gradients, GRAD_CLIP)
 
             # Apply local gradients to global network
-            global_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, GLOBAL_NET_SCOPE + '/qvalues')
+            global_vars = tf.compat.v1.get_collection(tf.compat.v1.GraphKeys.TRAINABLE_VARIABLES, GLOBAL_NET_SCOPE + '/qvalues')
             if self.trainer:
                 self.apply_grads = self.trainer.apply_gradients(zip(self.grads, global_vars))
 
@@ -92,7 +97,7 @@ class ACNet:
             
             # now the gradients for imitation loss
             self.i_gradients = tf.gradients(self.imitation_loss, local_vars)
-            self.i_var_norms = tf.global_norm(local_vars)
+            self.i_var_norms = tf.linalg.global_norm(local_vars)
             self.i_grads, self.i_grad_norms = tf.clip_by_global_norm(self.i_gradients, GRAD_CLIP)
 
             # Apply local gradients to global network
@@ -102,8 +107,8 @@ class ACNet:
             
         if GLOBAL_NETWORK:
             print("\n\n\n\n is a global network\n\n\n\n")
-            weightVars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES)
-            self.tempGradients = [tf.placeholder(shape=w.get_shape(), dtype=tf.float32) for w in weightVars]
+            weightVars = tf.compat.v1.get_collection(tf.compat.v1.GraphKeys.TRAINABLE_VARIABLES)
+            self.tempGradients = [tf.compat.v1.placeholder(shape=w.get_shape(), dtype=tf.float32) for w in weightVars]
             self.apply_grads = self.trainer.apply_gradients(zip(self.tempGradients, weightVars))
             #self.clippedGrads, norms = tf.clip_by_global_norm(self.tempGradients, GRAD_CLIP)
             #self.apply_grads = self.trainer.apply_gradients(zip(self.clippedGrads, weightVars))
@@ -113,7 +118,13 @@ class ACNet:
     def _build_net(self, inputs, goal_pos, RNN_SIZE, TRAINING, a_size):
         def conv_mlp(inputs, kernal_size, output_size):
             inputs = tf.reshape(inputs, [-1, 1, kernal_size, 1])
-            conv = layers.conv2d(inputs=inputs, padding="VALID", num_outputs=output_size,
+            # Mod by Tim: 
+            # See https://www.tensorflow.org/api_docs/python/tf/compat/v1/layers/conv2d
+            # for TF1 to TF2 conversions
+            # conv = layers.conv2d(inputs=inputs, padding="VALID", num_outputs=output_size,
+            #                      kernel_size=[1, kernal_size], stride=1,
+            #                      data_format="NHWC", weights_initializer=w_init, activation_fn=tf.nn.relu)
+            conv = tfa.layers.conv2d(inputs=inputs, padding="VALID", num_outputs=output_size,
                                  kernel_size=[1, kernal_size], stride=1,
                                  data_format="NHWC", weights_initializer=w_init, activation_fn=tf.nn.relu)
 
@@ -121,7 +132,10 @@ class ACNet:
 
         def VGG_Block(inputs):
             def conv_2d(inputs, kernal_size, output_size):
-                conv = layers.conv2d(inputs=inputs, padding="SAME", num_outputs=output_size,
+                # conv = layers.conv2d(inputs=inputs, padding="SAME", num_outputs=output_size,
+                #                      kernel_size=[kernal_size[0], kernal_size[1]], stride=1,
+                #                      data_format="NHWC", weights_initializer=w_init, activation_fn=tf.nn.relu)
+                conv = tfa.layers.conv2d(inputs=inputs, padding="SAME", num_outputs=output_size,
                                      kernel_size=[kernal_size[0], kernal_size[1]], stride=1,
                                      data_format="NHWC", weights_initializer=w_init, activation_fn=tf.nn.relu)
 
@@ -133,11 +147,15 @@ class ACNet:
             pool1 = layers.max_pool2d(inputs=conv1b, kernel_size=[2, 2])
             return pool1
 
-        w_init = layers.variance_scaling_initializer()
+        # Mod by Tim:
+        # w_init = layers.variance_scaling_initializer()
+        w_init = tf.variance_scaling_initializer()
         vgg1 = VGG_Block(inputs)
         vgg2 = VGG_Block(vgg1)
 
-        conv3 = layers.conv2d(inputs=vgg2, padding="VALID", num_outputs=RNN_SIZE - GOAL_REPR_SIZE, kernel_size=[2, 2],
+        # conv3 = layers.conv2d(inputs=vgg2, padding="VALID", num_outputs=RNN_SIZE - GOAL_REPR_SIZE, kernel_size=[2, 2],
+        #                       stride=1, data_format="NHWC", weights_initializer=w_init, activation_fn=None)
+        conv3 = tfa.layers.conv2D(inputs=vgg2, padding="VALID", num_outputs=RNN_SIZE - GOAL_REPR_SIZE, kernel_size=[2, 2],
                               stride=1, data_format="NHWC", weights_initializer=w_init, activation_fn=None)
 
         flat = tf.nn.relu(layers.flatten(conv3))
@@ -149,17 +167,17 @@ class ACNet:
         d2 = layers.dropout(h2, keep_prob=KEEP_PROB2, is_training=TRAINING)
         self.h3 = tf.nn.relu(d2 + hidden_input)
         # Recurrent network for temporal dependencies
-        lstm_cell = tf.nn.rnn_cell.BasicLSTMCell(RNN_SIZE, state_is_tuple=True)
+        lstm_cell = tf.compat.v1.nn.rnn_cell.BasicLSTMCell(RNN_SIZE, state_is_tuple=True)
         c_init = np.zeros((1, lstm_cell.state_size.c), np.float32)
         h_init = np.zeros((1, lstm_cell.state_size.h), np.float32)
         state_init = [c_init, h_init]
-        c_in = tf.placeholder(tf.float32, [1, lstm_cell.state_size.c])
-        h_in = tf.placeholder(tf.float32, [1, lstm_cell.state_size.h])
+        c_in = tf.compat.v1.placeholder(tf.float32, [1, lstm_cell.state_size.c])
+        h_in = tf.compat.v1.placeholder(tf.float32, [1, lstm_cell.state_size.h])
         state_in = (c_in, h_in)
         rnn_in = tf.expand_dims(self.h3, [0])
         step_size = tf.shape(inputs)[:1]
-        state_in = tf.nn.rnn_cell.LSTMStateTuple(c_in, h_in)
-        lstm_outputs, lstm_state = tf.nn.dynamic_rnn(
+        state_in = tf.compat.v1.nn.rnn_cell.LSTMStateTuple(c_in, h_in)
+        lstm_outputs, lstm_state = tf.compat.v1.nn.dynamic_rnn(
             lstm_cell, rnn_in, initial_state=state_in, sequence_length=step_size,
             time_major=False)
         lstm_c, lstm_h = lstm_state
